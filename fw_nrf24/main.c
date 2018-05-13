@@ -173,7 +173,7 @@ static void initUart1() {
 	// usart_set_baudrate(USART1, 38400);
 	/* TODO usart_set_baudrate() doesn't support 24MHz clock (yet). */
 	/* This is the equivalent: */
-	USART_BRR(USART1) = (uint16_t)((72000000 << 4) / (9600 * 16));
+	USART_BRR(USART1) = (uint16_t)((72000000 << 4) / (115200 * 16));
 
 	usart_set_databits(USART1, 8);
 	usart_set_stopbits(USART1, USART_STOPBITS_1);
@@ -237,28 +237,34 @@ static void blink() {
 
 int main(void) {
   init();
+
   gpio_set(GPIO_LED_PORT, GPIO_LED_PIN);
 
   int32_t recvByteCount;
   char recvBuffer[NRF_MAX_PAYLOAD_SIZE + 1];
+
+  union {
+    int16_t val;
+    unsigned char b[2];
+  } amps;
+
+  amps.val = 0;
 
   while(TRUE) {
     recvByteCount = nrf24_recvPacket(recvBuffer);
     recvBuffer[recvByteCount] = '\0';
 
     if(recvByteCount != NRF_NO_DATA_AVAILABLE) {
+      if(recvBuffer[4] == 0x42)
+        amps.val = 2000;
+      else
+        amps.val = 0;
+
       blink();
-      debugPrint("Received [");
-      debugPrintDec(recvByteCount);
-      debugPrint("]: ");
-
-      for(int i = 0; i < recvByteCount; ++i) {
-        debugPrintHex(recvBuffer[i]);
-        debugPrint(" ");
-      }
-
-      debugPrintln("");
     }
+
+    usart_send_blocking(USART1, amps.b[0]);
+    usart_send_blocking(USART1, amps.b[1]);
   }
 
   return 0;
