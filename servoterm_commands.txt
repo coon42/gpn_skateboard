@@ -1,0 +1,5 @@
+term0.wave0 = uvw0.pos # map hal sensors to graph
+hv0.en = 1 # enable power for motor
+curpid0.en = 1 # enable another power for motor !?
+curpid0.iq_cmd = 3 # set power in amperes. Positive value => forward, Negative value => backward
+
