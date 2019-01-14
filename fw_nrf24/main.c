@@ -173,7 +173,7 @@ static void initUart1() {
 	// usart_set_baudrate(USART1, 38400);
 	/* TODO usart_set_baudrate() doesn't support 24MHz clock (yet). */
 	/* This is the equivalent: */
-	USART_BRR(USART1) = (uint16_t)((72000000 << 4) / (115200 * 16));
+	USART_BRR(USART1) = (uint16_t)((72000000 << 4) / (19200 * 16));
 
 	usart_set_databits(USART1, 8);
 	usart_set_stopbits(USART1, USART_STOPBITS_1);
@@ -192,7 +192,7 @@ static void setup_nrf24() {
   // uint8_t rxaddr2[] = { 0x09, 0x46, 0x00, 0x53, 0x00 };
   // uint8_t txaddr2[] = { 0x09, 0x46, 0x00, 0x53, 0x00 };
   uint8_t rxaddr[] = {0x01, 0x02, 0x03, 0x02, 0x01 };
-  uint8_t txaddr[] = {0x01, 0x02, 0x03, 0x02, 0x01 };
+  uint8_t txaddr[] = {0x01, 0x02, 0x03, 0x02, 0x01};
 
   nrf24_setRxAddress(PIPE_0, rxaddr);
   nrf24_setTxAddress(txaddr);
@@ -244,27 +244,38 @@ int main(void) {
   char recvBuffer[NRF_MAX_PAYLOAD_SIZE + 1];
 
   union {
-    int16_t val;
-    unsigned char b[2];
-  } amps;
+    struct {
+      uint8_t pMagic[4];
 
-  amps.val = 0;
+      struct {
+        int16_t steering;
+        int16_t speed;
+      } payload;
+    } msg;
+
+    uint8_t pRaw[16];
+  } data;
+
+  memset(&data, 0, 16);
 
   while(TRUE) {
     recvByteCount = nrf24_recvPacket(recvBuffer);
-    recvBuffer[recvByteCount] = '\0';
+    memcpy(&data, recvBuffer, sizeof(data));
 
-    if(recvByteCount != NRF_NO_DATA_AVAILABLE) {
-      if(recvBuffer[4] == 0x42)
-        amps.val = 2000;
-      else
-        amps.val = 0;
+    if (recvByteCount != NRF_NO_DATA_AVAILABLE) {
+      if (data.msg.pMagic[0] == 0xC0 &&
+          data.msg.pMagic[1] == 0xFE &&
+          data.msg.pMagic[2] == 0xFE &&
+          data.msg.pMagic[3] == 0x00) {
 
-      blink();
+        uint8_t* p = &data.msg.payload;
+
+        for (int i = 0; i < sizeof(data.msg.payload); ++i)
+          usart_send_blocking(USART1, p[i]);
+
+        blink();
+      }
     }
-
-    usart_send_blocking(USART1, amps.b[0]);
-    usart_send_blocking(USART1, amps.b[1]);
   }
 
   return 0;
